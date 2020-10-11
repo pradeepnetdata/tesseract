@@ -7,18 +7,24 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.os.Build;
 import android.os.IBinder;
+import android.os.RemoteCallbackList;
+import android.os.RemoteException;
 import android.util.Log;
 import android.view.Display;
 import android.view.WindowManager;
 
+import androidx.annotation.RequiresApi;
+
+import com.tesseract.phoneapp.IAidlCbListener;
 import com.tesseract.phoneapp.IOrientationService;
 
 public class AppService extends Service implements SensorEventListener{
 
-    //private RemoteCallbackList<ICallback> mCallbacks = new RemoteCallbackList<ICallback>();
+    private RemoteCallbackList<IAidlCbListener> mCallbacks = new RemoteCallbackList<IAidlCbListener>();
     private SensorManager mSensorManager;
-
+    private static final String TAG = AppService.class.getName();
     // Accelerometer and magnetometer sensors, as retrieved from the
     // sensor manager.
     private Sensor mSensorRotationvector;
@@ -62,6 +68,17 @@ public class AppService extends Service implements SensorEventListener{
                 return mRotationData;
             }
 
+            @Override
+            public void registerCallback(IAidlCbListener cb) throws RemoteException {
+                mCallbacks.register(cb);
+        }
+
+            @Override
+            public void unregisterCallback(IAidlCbListener cb) throws RemoteException {
+                mCallbacks.unregister(cb);
+            }
+
+
         };
         //return  null;
     }
@@ -71,6 +88,7 @@ public class AppService extends Service implements SensorEventListener{
         Log.d(TAG, "onDestroy()");
         mSensorManager.unregisterListener(this);
     }
+
 
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
@@ -85,6 +103,12 @@ public class AppService extends Service implements SensorEventListener{
                  Log.d(TAG, String.format("AdditionService.add(%f, %f)",mRotationData[0], mRotationData[1]));
 
                 //mTextSensorAzimuth.setText((int) mAccelerometerData[0]);
+                try {
+                    notifyClient(mRotationData);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                    Log.d(TAG, "exception :: "+e.toString());
+                }
                 break;
 
             default:
@@ -95,5 +119,15 @@ public class AppService extends Service implements SensorEventListener{
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {
 
+    }
+
+    public void notifyClient(float [] notifyContent) throws RemoteException {
+        mCallbacks.beginBroadcast();
+        //Traverse through all registered Liisteners and invoke their implementation methods one by one, that is, notify all registrants
+        for(int i=0;i<mCallbacks.getRegisteredCallbackCount();i++){
+            IAidlCbListener cb = mCallbacks.getBroadcastItem(i);
+            cb.valueChanged(notifyContent);
+        }
+        mCallbacks.finishBroadcast();
     }
 }

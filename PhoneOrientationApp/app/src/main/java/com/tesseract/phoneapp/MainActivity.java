@@ -26,7 +26,9 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.os.RemoteException;
 import android.util.Log;
 import android.view.Display;
@@ -42,21 +44,10 @@ import com.tesseract.phoneapp.service.AppService;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "AIDLDemo";
-   // IOrientationService service;
+    IOrientationService service;
     AppServiceConnection connection;
     private float[] mAccelerometerData = new float[3];
-    // System sensor manager instance.
- /*   private SensorManager mSensorManager;
 
-    // Accelerometer and magnetometer sensors, as retrieved from the
-    // sensor manager.
-    private Sensor mSensorAccelerometer;
-    private Sensor mSensorMagnetometer;
-
-    // Current data from accelerometer & magnetometer.  The arrays hold values
-    // for X, Y, and Z.
-    private float[] mAccelerometerData = new float[3];
-    private float[] mMagnetometerData = new float[3];*/
 
     // TextViews to display current sensor values.
     private TextView mTextSensorAzimuth;
@@ -105,11 +96,17 @@ public class MainActivity extends AppCompatActivity {
     class AppServiceConnection implements ServiceConnection {
 
         public void onServiceConnected(ComponentName name, IBinder boundService) {
-           // service = IOrientationService.Stub.asInterface((IBinder) boundService);
+            service = IOrientationService.Stub.asInterface((IBinder) boundService);
             Log.d(MainActivity.TAG, "onServiceConnected() connected");
             Toast.makeText(MainActivity.this, "Service connected", Toast.LENGTH_LONG)
                     .show();
-            setRotationalInfo();
+            try {
+                mAccelerometerData = service.getRotationVectorInfo();
+                setRotationalInfo();
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+
         }
 
         public void onServiceDisconnected(ComponentName name) {
@@ -160,4 +157,32 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         releaseService();
     }
+    /**
+     * This implementation is used to receive callbacks from the remote
+     * service.
+     */
+    private IAidlCbListener mCallback = new IAidlCbListener.Stub() {
+        @Override
+        public void valueChanged(float[] value) throws RemoteException {
+            //mHandler.sendMessage(mHandler.obtainMessage(BUMP_MSG, value, 0));
+            mAccelerometerData = value;
+            setRotationalInfo();
+        }
+
+    };
+
+    private static final int BUMP_MSG = 1;
+
+    private Handler mHandler = new Handler() {
+        @Override public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case BUMP_MSG:
+                    //mCallbackText.setText("Received from service: " + msg.arg1);
+                    break;
+                default:
+                    super.handleMessage(msg);
+            }
+        }
+
+    };
 }
