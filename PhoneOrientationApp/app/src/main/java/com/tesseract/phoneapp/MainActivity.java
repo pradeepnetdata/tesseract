@@ -16,25 +16,15 @@
 
 package com.tesseract.phoneapp;
 
-import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Message;
 import android.os.RemoteException;
 import android.util.Log;
 import android.view.Display;
-import android.view.Surface;
-import android.view.WindowManager;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -44,20 +34,16 @@ import com.tesseract.phoneapp.service.AppService;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "AIDLDemo";
-    IOrientationService service;
-    AppServiceConnection connection;
+    private IOrientationService service;
+    private AppServiceConnection connection;
     private float[] mAccelerometerData = new float[3];
-
-
-    // TextViews to display current sensor values.
     private TextView mTextSensorAzimuth;
     private TextView mTextSensorPitch;
     private TextView mTextSensorRoll;
-
-
-    // System display. Need this for determining rotation.
     private Display mDisplay;
     private static final float VALUE_DRIFT = 0.05f;
+    private IAidlCbListener mCallback;
+    private MyCbListener myCbListener = new MyCbListener();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,26 +53,16 @@ public class MainActivity extends AppCompatActivity {
         mTextSensorAzimuth = (TextView) findViewById(R.id.value_azimuth);
         mTextSensorPitch = (TextView) findViewById(R.id.value_pitch);
         mTextSensorRoll = (TextView) findViewById(R.id.value_roll);
-
-
         initService();
     }
 
-    /**
-     * Listeners for the sensors are registered in this callback so that
-     * they can be unregistered in onStop().
-     */
     @Override
     protected void onStart() {
         super.onStart();
-
     }
-
-
     @Override
     protected void onStop() {
         super.onStop();
-
     }
 
     /**
@@ -98,15 +74,18 @@ public class MainActivity extends AppCompatActivity {
         public void onServiceConnected(ComponentName name, IBinder boundService) {
             service = IOrientationService.Stub.asInterface((IBinder) boundService);
             Log.d(MainActivity.TAG, "onServiceConnected() connected");
+
             Toast.makeText(MainActivity.this, "Service connected", Toast.LENGTH_LONG)
                     .show();
+
+            if(myCbListener == null){
+                myCbListener = new MyCbListener();
+            }
             try {
-                mAccelerometerData = service.getRotationVectorInfo();
-                setRotationalInfo();
+                service.registerCallback(myCbListener);
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
-
         }
 
         public void onServiceDisconnected(ComponentName name) {
@@ -120,7 +99,6 @@ public class MainActivity extends AppCompatActivity {
     private void initService() {
         connection = new AppServiceConnection();
         Intent i = new Intent(this, AppService.class);
-        //i.setClassName("com.marakana", com.marakana.AdditionService.class.getName());
         boolean ret = bindService(i, connection, Context.BIND_AUTO_CREATE);
         Log.d(TAG, "initService() bound with " + ret);
     }
@@ -133,12 +111,6 @@ public class MainActivity extends AppCompatActivity {
     }
     private void setRotationalInfo(){
 
-
-        /*try {
-            mAccelerometerData = service.getRotationVectorInfo();
-        } catch (RemoteException e) {
-            Log.d(MainActivity.TAG, "RemoteException :: "+e.toString());
-        }*/
         float azimuth = mAccelerometerData[0];
         float pitch = mAccelerometerData[1];
         float roll = mAccelerometerData[2];
@@ -157,32 +129,14 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         releaseService();
     }
-    /**
-     * This implementation is used to receive callbacks from the remote
-     * service.
-     */
-    private IAidlCbListener mCallback = new IAidlCbListener.Stub() {
+    //Implement callback listener
+    class MyCbListener extends IAidlCbListener.Stub{
+
         @Override
-        public void valueChanged(float[] value) throws RemoteException {
-            //mHandler.sendMessage(mHandler.obtainMessage(BUMP_MSG, value, 0));
+        public void valueChanged(float[] value) {
+            Log.d(TAG, "showServerMsg: ");
             mAccelerometerData = value;
             setRotationalInfo();
         }
-
-    };
-
-    private static final int BUMP_MSG = 1;
-
-    private Handler mHandler = new Handler() {
-        @Override public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case BUMP_MSG:
-                    //mCallbackText.setText("Received from service: " + msg.arg1);
-                    break;
-                default:
-                    super.handleMessage(msg);
-            }
-        }
-
-    };
+    }
 }
